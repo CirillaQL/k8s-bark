@@ -7,8 +7,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	bark_server_address string
+	namespaces          []string
+)
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.PersistentFlags().StringVarP(&bark_server_address, "bark-server-address", "s", "", "Bark server address")
+	rootCmd.PersistentFlags().StringSliceVarP(&namespaces, "namespaces", "n", []string{}, "Namespaces to watch")
 }
 
 // rootCmd 代表没有调用子命令时的基础命令
@@ -16,6 +23,18 @@ var rootCmd = &cobra.Command{
 	Use:   "k8s-bark",
 	Short: "k8s-bark is a tool for watching k8s cluster and push message to iphone",
 	Long:  "A Service to watch Kubernetes Cluster and resourse events and status and push message to iphone",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if args[0] != "in-cluster" && args[0] != "out-cluster" {
+			return fmt.Errorf("in-cluster or out-cluster")
+		}
+		return nil
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(bark_server_address)
+		for _, v := range namespaces {
+			fmt.Println(v)
+		}
+	},
 }
 
 // versionCmd 代表输入version时的基础命令
