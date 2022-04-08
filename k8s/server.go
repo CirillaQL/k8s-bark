@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"k8s-bark/bark"
 	"path/filepath"
 	"time"
 
@@ -17,9 +18,10 @@ import (
 type K8sWatch struct {
 	config    *rest.Config
 	clientset *kubernetes.Clientset
+	bark      *bark.Bark
 }
 
-func NewK8sWatch(location string) (k8swatch *K8sWatch) {
+func NewK8sWatch(location, barkServer string) (k8swatch *K8sWatch) {
 	k8swatch = &K8sWatch{}
 	if location == "in-cluster" {
 		config, err := rest.InClusterConfig()
@@ -50,10 +52,13 @@ func NewK8sWatch(location string) (k8swatch *K8sWatch) {
 		panic(err.Error())
 	}
 	k8swatch.clientset = clientset
+	bark := bark.NewBark(barkServer)
+	k8swatch.bark = bark
 	return k8swatch
 }
 
 func (k8swatch *K8sWatch) Watch() {
+	go k8swatch.bark.HealthzCheck()
 	for {
 		pods, err := k8swatch.clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
