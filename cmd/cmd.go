@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"k8s-bark/k8s"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -30,10 +31,8 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(bark_server_address)
-		for _, v := range namespaces {
-			fmt.Println(v)
-		}
+		k8swatch := k8s.NewK8sWatch(args[0])
+		k8swatch.Watch()
 	},
 }
 
