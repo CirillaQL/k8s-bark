@@ -1,11 +1,13 @@
 package bark
 
 import (
-	"fmt"
 	"io/ioutil"
+	"k8s-bark/pkg/log"
 	"net/http"
 	"time"
 )
+
+var LOG = log.LOG
 
 const (
 	BARK_SERVER_OK  = 0
@@ -30,19 +32,20 @@ func (b *Bark) HealthzCheck() {
 	for {
 		resp, err := http.Get("http://" + b.barkServer + "/healthz")
 		if err != nil {
-			panic(err)
-		}
-		s, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		status := string(s)
-		if status == "ok" {
-			b.status = BARK_SERVER_OK
-			fmt.Println("bark server is ok")
+			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
 		} else {
-			b.status = BARK_SERVER_ERR
-			fmt.Println("bark server is not ok")
+			s, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				LOG.Errorf("bark server %s is not available", b.barkServer)
+				panic(err)
+			}
+			status := string(s)
+			if status == "ok" {
+				b.status = BARK_SERVER_OK
+			} else {
+				b.status = BARK_SERVER_ERR
+				LOG.Warnf("bark server %s is error, status is %s", b.barkServer, status)
+			}
 		}
 		time.Sleep(5 * time.Second)
 	}
