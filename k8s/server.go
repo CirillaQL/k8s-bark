@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"k8s-bark/bark"
+	"k8s-bark/pkg/log"
 	"path/filepath"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
+
+var LOG = log.LOG
 
 type K8sWatch struct {
 	config    *rest.Config
@@ -59,6 +62,7 @@ func NewK8sWatch(location, barkServer string) (k8swatch *K8sWatch) {
 
 func (k8swatch *K8sWatch) Watch() {
 	go k8swatch.bark.HealthzCheck()
+	go k8swatch.watchEvents()
 	for {
 		pods, err := k8swatch.clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -67,5 +71,20 @@ func (k8swatch *K8sWatch) Watch() {
 		fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 
 		time.Sleep(10 * time.Second)
+	}
+}
+
+// watchEvents 监控Status
+func (k8swatch *K8sWatch) watchEvents() {
+	for {
+		pods, err := k8swatch.clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			panic(err.Error())
+		}
+		for _, pod := range pods.Items {
+			LOG.Infof("Pod Name: %s, Pod Status: %s", pod.Name, pod.Status.Phase)
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 }
