@@ -62,7 +62,7 @@ func NewK8sWatch(location, barkServer string) (k8swatch *K8sWatch) {
 
 func (k8swatch *K8sWatch) Watch() {
 	go k8swatch.bark.HealthzCheck()
-	go k8swatch.watchEvents()
+	go k8swatch.watchPodsStatus()
 	for {
 		pods, err := k8swatch.clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -74,15 +74,17 @@ func (k8swatch *K8sWatch) Watch() {
 	}
 }
 
-// watchEvents 监控Status
-func (k8swatch *K8sWatch) watchEvents() {
+// watchPodsStatus 监控Status
+func (k8swatch *K8sWatch) watchPodsStatus() {
 	for {
 		pods, err := k8swatch.clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			panic(err.Error())
 		}
 		for _, pod := range pods.Items {
-			LOG.Infof("Pod Name: %s, Pod Status: %s", pod.Name, pod.Status.Phase)
+			if pod.Status.Phase != "Running" {
+				LOG.Infof("Pod Name: %s, Pod Status: %s", pod.Name, pod.Status.Phase)
+			}
 		}
 
 		time.Sleep(5 * time.Second)
