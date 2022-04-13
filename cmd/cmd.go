@@ -10,12 +10,14 @@ import (
 
 var (
 	bark_server_address string
+	bark_token          string
 	namespaces          []string
 )
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.PersistentFlags().StringVarP(&bark_server_address, "bark-server-address", "s", "", "Bark server address")
+	rootCmd.PersistentFlags().StringVarP(&bark_token, "bark-token", "t", "", "Bark token")
 	rootCmd.PersistentFlags().StringSliceVarP(&namespaces, "namespaces", "n", []string{}, "Namespaces to watch")
 }
 
@@ -31,7 +33,7 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		k8swatch := k8s.NewK8sWatch(args[0], bark_server_address)
+		k8swatch := k8s.NewK8sWatch(args[0], bark_server_address, bark_token)
 		k8swatch.Watch()
 	},
 }

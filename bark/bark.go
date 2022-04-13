@@ -16,14 +16,16 @@ const (
 
 type Bark struct {
 	barkServer  string
+	barkToken   string
 	status      int
 	messageChan chan Message
 }
 
 // NewBark 创建一个新的bark实例
-func NewBark(barkServer string) *Bark {
+func NewBark(barkServer, barkToken string) *Bark {
 	return &Bark{
 		barkServer:  barkServer,
+		barkToken:   barkToken,
 		status:      BARK_SERVER_OK,
 		messageChan: make(chan Message, 10),
 	}
@@ -53,14 +55,19 @@ func (b *Bark) HealthzCheck() {
 	}
 }
 
+// Push 向bark的Channel写入消息
+func (b *Bark) Push(message Message) {
+	b.messageChan <- message
+}
+
 // Send 向bark发送消息
-func (b *Bark) Send(message Message) {
+func (b *Bark) Send() {
 	for {
 		message := <-b.messageChan
 		if b.status != BARK_SERVER_OK {
 			continue
 		}
-		resp, err := http.Get("http://" + b.barkServer + "/" + message.Status + "/" + message.Information)
+		resp, err := http.Get("http://" + b.barkServer + "/" + b.barkToken + "/" + message.Status + "/" + message.Information)
 		if err != nil {
 			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
 		} else {
@@ -77,7 +84,5 @@ func (b *Bark) Send(message Message) {
 				LOG.Warnf("bark server %s is error, status is %s", b.barkServer, status)
 			}
 		}
-		time.Sleep(5 * time.Second)
 	}
-
 }

@@ -24,7 +24,7 @@ type K8sWatch struct {
 	bark      *bark.Bark
 }
 
-func NewK8sWatch(location, barkServer string) (k8swatch *K8sWatch) {
+func NewK8sWatch(location, barkServer, barkToken string) (k8swatch *K8sWatch) {
 	k8swatch = &K8sWatch{}
 	if location == "in-cluster" {
 		config, err := rest.InClusterConfig()
@@ -55,7 +55,7 @@ func NewK8sWatch(location, barkServer string) (k8swatch *K8sWatch) {
 		panic(err.Error())
 	}
 	k8swatch.clientset = clientset
-	bark := bark.NewBark(barkServer)
+	bark := bark.NewBark(barkServer, barkToken)
 	k8swatch.bark = bark
 	return k8swatch
 }
@@ -63,15 +63,25 @@ func NewK8sWatch(location, barkServer string) (k8swatch *K8sWatch) {
 func (k8swatch *K8sWatch) Watch() {
 	go k8swatch.bark.HealthzCheck()
 	go k8swatch.watchPodsStatus()
+	go k8swatch.bark.Send()
 	for {
 		pods, err := k8swatch.clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			panic(err.Error())
 		}
+		m := bark.Message{
+			Status:      "Pods",
+			Information: fmt.Sprintf("There_are_%d_pods_in_the_cluster", len(pods.Items)),
+		}
+		k8swatch.Push(m)
 		fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 
 		time.Sleep(10 * time.Second)
 	}
+}
+
+func (k8swatch *K8sWatch) Push(message bark.Message) {
+	k8swatch.bark.Push(message)
 }
 
 // watchPodsStatus 监控Status
@@ -85,6 +95,7 @@ func (k8swatch *K8sWatch) watchPodsStatus() {
 			if pod.Status.Phase != "Running" {
 				LOG.Infof("Pod Name: %s, Pod Status: %s", pod.Name, pod.Status.Phase)
 			}
+
 		}
 
 		time.Sleep(5 * time.Second)
