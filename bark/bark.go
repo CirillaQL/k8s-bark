@@ -40,7 +40,7 @@ func (b *Bark) HealthzCheck() {
 			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
 		} else {
 			_json := HealthResponse{}
-			json.NewDecoder(resp.Body).Decode(&_json)
+			err = json.NewDecoder(resp.Body).Decode(&_json)
 			if err != nil {
 				LOG.Errorf("bark server %s is not available", b.barkServer)
 				panic(err)
