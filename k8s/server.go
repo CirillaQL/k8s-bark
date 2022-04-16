@@ -26,6 +26,7 @@ type K8sWatch struct {
 
 func NewK8sWatch(location, barkServer, barkToken string) (k8swatch *K8sWatch) {
 	k8swatch = &K8sWatch{}
+	// 初始化配置，检测k8s-bark是否在集群中运行
 	if location == "in-cluster" {
 		config, err := rest.InClusterConfig()
 		if err != nil {
@@ -48,6 +49,7 @@ func NewK8sWatch(location, barkServer, barkToken string) (k8swatch *K8sWatch) {
 		}
 		k8swatch.config = config
 	} else {
+		LOG.Errorf("location: %s is not supported", location)
 		panic("location must be in-cluster or out-cluster")
 	}
 	clientset, err := kubernetes.NewForConfig(k8swatch.config)

@@ -1,6 +1,7 @@
 package bark
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"k8s-bark/pkg/log"
 	"net/http"
@@ -38,18 +39,17 @@ func (b *Bark) HealthzCheck() {
 		if err != nil {
 			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
 		} else {
-			s, err := ioutil.ReadAll(resp.Body)
+			_json := HealthResponse{}
+			json.NewDecoder(resp.Body).Decode(&_json)
 			if err != nil {
 				LOG.Errorf("bark server %s is not available", b.barkServer)
 				panic(err)
 			}
-			status := string(s)
-			if status == "ok" {
-				b.status = BARK_SERVER_OK
-			} else {
-				b.status = BARK_SERVER_ERR
-				LOG.Warnf("bark server %s is error, status is %s", b.barkServer, status)
-			}
+			status := _json.Code
+			message := _json.Message
+			LOG.Info(status)
+			LOG.Info(message)
+			resp.Body.Close()
 		}
 		time.Sleep(5 * time.Second)
 	}
