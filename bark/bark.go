@@ -39,16 +39,17 @@ func (b *Bark) HealthzCheck() {
 		if err != nil {
 			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
 		} else {
-			_json := HealthResponse{}
-			err = json.NewDecoder(resp.Body).Decode(&_json)
+			s, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
 				LOG.Errorf("bark server %s is not available", b.barkServer)
 				panic(err)
 			}
-			status := _json.Code
-			message := _json.Message
-			LOG.Info(status)
-			LOG.Info(message)
+			status := string(s)
+			if status == "ok" {
+				b.status = BARK_SERVER_OK
+			} else {
+				b.status = BARK_SERVER_ERR
+			}
 			resp.Body.Close()
 		}
 		time.Sleep(5 * time.Second)
@@ -65,23 +66,22 @@ func (b *Bark) Send() {
 	for {
 		message := <-b.messageChan
 		if b.status != BARK_SERVER_OK {
+			LOG.Errorf("bark server %s is not available", b.barkServer)
 			continue
 		}
 		resp, err := http.Get("http://" + b.barkServer + "/" + b.barkToken + "/" + message.Status + "/" + message.Information)
 		if err != nil {
-			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
+			LOG.Errorf("bark server %s is not available, Send Message failed, Error: %s", b.barkServer, err.Error())
 		} else {
-			s, err := ioutil.ReadAll(resp.Body)
+			// 判断发送结果
+			resp_json := Response{}
+			err = json.NewDecoder(resp.Body).Decode(&resp_json)
 			if err != nil {
-				LOG.Errorf("bark server %s is not available", b.barkServer)
-				panic(err)
+				LOG.Errorf("Can't Decode bark server %s response, Error: %s, response: %+v", b.barkServer, err.Error(), resp.Body)
 			}
-			status := string(s)
-			if status == "ok" {
-				b.status = BARK_SERVER_OK
-			} else {
-				b.status = BARK_SERVER_ERR
-				LOG.Warnf("bark server %s is error, status is %s", b.barkServer, status)
+			if resp_json.Code != http.StatusOK {
+				LOG.Errorf("bark server %s response code is not 200, Error: %s, response: %+v", b.barkServer, resp_json.message, resp.Body)
+				LOG.Errorf("unsend message: %+v", message)
 			}
 		}
 	}
