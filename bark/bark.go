@@ -80,7 +80,7 @@ func (b *Bark) Send() {
 				LOG.Errorf("Can't Decode bark server %s response, Error: %s, response: %+v", b.barkServer, err.Error(), resp.Body)
 			}
 			if resp_json.Code != http.StatusOK {
-				LOG.Errorf("bark server %s response code is not 200, Error: %s, response: %+v", b.barkServer, resp_json.message, resp.Body)
+				LOG.Errorf("bark server %s response code is not 200, Error: %s, response: %+v", b.barkServer, resp_json.Message, resp.Body)
 				LOG.Errorf("unsend message: %+v", message)
 			}
 		}
