@@ -92,10 +92,10 @@ func (k8swatch *K8sWatch) Push(message bark.Message) {
 	k8swatch.bark.Push(message)
 }
 
-// watchPodsStatus 监控Pods Status
+// watchPodsStatus 监控Pods的创建与删除
 func (k8swatch *K8sWatch) watchPodsStatus(stopper chan struct{}) {
 	// 初始化informer
-	podFactory := informers.NewSharedInformerFactory(k8swatch.clientset, 0)
+	podFactory := informers.NewSharedInformerFactory(k8swatch.clientset, 3*time.Hour)
 	podInformer := podFactory.Core().V1().Pods().Informer()
 	go podFactory.Start(stopper)
 
@@ -113,17 +113,20 @@ func (k8swatch *K8sWatch) watchPodsStatus(stopper chan struct{}) {
 				Status:      "Pods",
 				Information: fmt.Sprintf("Pod_%s_is_created", pod.Name),
 			}
-			k8swatch.Push(m)
 			LOG.Infof("%+v", m)
 		},
 		UpdateFunc: func(old, new interface{}) {
-			pod := new.(*v1.Pod)
-			m := bark.Message{
-				Status:      "Pods",
-				Information: fmt.Sprintf("Pod_%s_is_updated", pod.Name),
+			old_pod := old.(*v1.Pod)
+			new_pod := new.(*v1.Pod)
+			if old_pod.ResourceVersion == new_pod.ResourceVersion {
+				LOG.Info("Pod is not changed")
+			} else {
+				m := bark.Message{
+					Status:      "Pods",
+					Information: fmt.Sprintf("Pod_%s_is_updated", new_pod.Name),
+				}
+				LOG.Infof("%+v", m)
 			}
-			k8swatch.Push(m)
-			LOG.Infof("%+v", m)
 		},
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
@@ -131,7 +134,6 @@ func (k8swatch *K8sWatch) watchPodsStatus(stopper chan struct{}) {
 				Status:      "Pods",
 				Information: fmt.Sprintf("Pod_%s_is_deleted", pod.Name),
 			}
-			k8swatch.Push(m)
 			LOG.Infof("%+v", m)
 		},
 	})
