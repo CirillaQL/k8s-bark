@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -96,33 +97,48 @@ func (k8swatch *K8sWatch) Push(message bark.Message) {
 func (k8swatch *K8sWatch) watchPodsStatus(stopper chan struct{}) {
 	// 初始化informer
 	podFactory := informers.NewSharedInformerFactory(k8swatch.clientset, 3*time.Hour)
-	podInformer := podFactory.Core().V1().Pods().Informer()
-	go podFactory.Start(stopper)
+	podInformer := podFactory.Core().V1().Pods()
+	informer := podInformer.Informer()
+	informer.Run(stopper)
 
 	// 从apiserver 同步资源，即List
-	if !cache.WaitForCacheSync(stopper, podInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopper, informer.HasSynced) {
 		LOG.Error("Timed out waiting for caches to sync")
 		return
 	}
 
+	podLister := podInformer.Lister()
+	podInitList, err := podLister.List(labels.Everything())
+	if err != nil {
+		LOG.Errorf("List pods failed: %s", err.Error())
+	}
+
 	// 使用自定义Handler
-	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			pod := obj.(*v1.Pod)
-			m := bark.Message{
-				Status:      "Pods",
-				Information: fmt.Sprintf("Pod_%s_is_created", pod.Name),
+			new_pod := obj.(*v1.Pod)
+			for _, podInList := range podInitList {
+				if podInList.Name == new_pod.Name {
+					if podInList.ResourceVersion == new_pod.ResourceVersion {
+						return
+					} else {
+						m := bark.Message{
+							Type:        "Pod",
+							Status:      "Add",
+							Information: fmt.Sprintf("Pod_%s_is_created", new_pod.Name),
+						}
+						LOG.Infof("%+v", m)
+					}
+				}
 			}
-			LOG.Infof("%+v", m)
 		},
 		UpdateFunc: func(old, new interface{}) {
 			old_pod := old.(*v1.Pod)
 			new_pod := new.(*v1.Pod)
-			if old_pod.ResourceVersion == new_pod.ResourceVersion {
-				LOG.Info("Pod is not changed")
-			} else {
+			if old_pod.ResourceVersion != new_pod.ResourceVersion {
 				m := bark.Message{
-					Status:      "Pods",
+					Type:        "Pod",
+					Status:      "Update",
 					Information: fmt.Sprintf("Pod_%s_is_updated", new_pod.Name),
 				}
 				LOG.Infof("%+v", m)
@@ -131,10 +147,12 @@ func (k8swatch *K8sWatch) watchPodsStatus(stopper chan struct{}) {
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
 			m := bark.Message{
-				Status:      "Pods",
+				Type:        "Pod",
+				Status:      "Delete",
 				Information: fmt.Sprintf("Pod_%s_is_deleted", pod.Name),
 			}
 			LOG.Infof("%+v", m)
 		},
 	})
+
 }

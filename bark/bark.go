@@ -2,6 +2,7 @@ package bark
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"k8s-bark/pkg/log"
 	"net/http"
@@ -69,7 +70,8 @@ func (b *Bark) Send() {
 			LOG.Errorf("bark server %s is not available", b.barkServer)
 			continue
 		}
-		resp, err := http.Get("http://" + b.barkServer + "/" + b.barkToken + "/" + message.Status + "/" + message.Information)
+		url := fmt.Sprintf("http://%s/%s/%s/%s", b.barkServer, b.barkToken, message.Type, message.Status+":"+message.Information)
+		resp, err := http.Get(url)
 		if err != nil {
 			LOG.Errorf("bark server %s is not available, Send Message failed, Error: %s", b.barkServer, err.Error())
 		} else {
