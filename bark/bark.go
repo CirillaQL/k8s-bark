@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"k8s-bark/pkg/log"
+	"k8s-bark/pkg/logger"
 	"net/http"
 	"time"
 )
-
-var LOG = log.LOG
 
 const (
 	BARK_SERVER_OK  = 0
@@ -38,11 +36,11 @@ func (b *Bark) HealthzCheck() {
 	for {
 		resp, err := http.Get("http://" + b.barkServer + "/healthz")
 		if err != nil {
-			LOG.Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
+			logger.Log().Errorf("bark server %s is not available, Error: %s", b.barkServer, err.Error())
 		} else {
 			s, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				LOG.Errorf("bark server %s is not available", b.barkServer)
+				logger.Log().Errorf("bark server %s is not available", b.barkServer)
 				panic(err)
 			}
 			status := string(s)
@@ -67,23 +65,23 @@ func (b *Bark) Send() {
 	for {
 		message := <-b.messageChan
 		if b.status != BARK_SERVER_OK {
-			LOG.Errorf("bark server %s is not available", b.barkServer)
+			logger.Log().Errorf("bark server %s is not available", b.barkServer)
 			continue
 		}
 		url := fmt.Sprintf("http://%s/%s/%s/%s", b.barkServer, b.barkToken, message.Type, message.Status+":"+message.Information)
 		resp, err := http.Get(url)
 		if err != nil {
-			LOG.Errorf("bark server %s is not available, Send Message failed, Error: %s", b.barkServer, err.Error())
+			logger.Log().Errorf("bark server %s is not available, Send Message failed, Error: %s", b.barkServer, err.Error())
 		} else {
 			// 判断发送结果
 			resp_json := Response{}
 			err = json.NewDecoder(resp.Body).Decode(&resp_json)
 			if err != nil {
-				LOG.Errorf("Can't Decode bark server %s response, Error: %s, response: %+v", b.barkServer, err.Error(), resp.Body)
+				logger.Log().Errorf("Can't Decode bark server %s response, Error: %s, response: %+v", b.barkServer, err.Error(), resp.Body)
 			}
 			if resp_json.Code != http.StatusOK {
-				LOG.Errorf("bark server %s response code is not 200, Error: %s, response: %+v", b.barkServer, resp_json.Message, resp.Body)
-				LOG.Errorf("unsend message: %+v", message)
+				logger.Log().Errorf("bark server %s response code is not 200, Error: %s, response: %+v", b.barkServer, resp_json.Message, resp.Body)
+				logger.Log().Errorf("unsend message: %+v", message)
 			}
 		}
 	}

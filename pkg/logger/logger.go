@@ -1,4 +1,4 @@
-package log
+package logger
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var LOG *zap.SugaredLogger
+var log *zap.SugaredLogger
 
 // TimeEncoder 自定义日志的时间输出格式
 func TimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
@@ -26,5 +26,9 @@ func init() {
 	encoder := zapcore.NewConsoleEncoder(encoderConfig)
 	core := zapcore.NewCore(encoder, writer, zapcore.DebugLevel)
 	_log := zap.New(core)
-	LOG = _log.Sugar()
+	log = _log.Sugar()
+}
+
+func Log() *zap.SugaredLogger {
+	return log
 }

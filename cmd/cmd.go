@@ -12,6 +12,7 @@ var (
 	bark_server_address string
 	bark_token          string
 	namespaces          []string
+	watchResource       []string
 )
 
 func init() {
@@ -19,6 +20,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&bark_server_address, "bark-server-address", "s", "", "Bark server address")
 	rootCmd.PersistentFlags().StringVarP(&bark_token, "bark-token", "t", "", "Bark token")
 	rootCmd.PersistentFlags().StringSliceVarP(&namespaces, "namespaces", "n", []string{}, "Namespaces to watch")
+	rootCmd.PersistentFlags().StringSliceVarP(&watchResource, "watch-resource", "r", []string{}, "Watch resource")
 }
 
 // rootCmd 代表没有调用子命令时的基础命令
@@ -33,7 +35,8 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		k8swatch := k8s.NewK8sWatch(args[0], bark_server_address, bark_token)
+		k8swatch := k8s.NewK8sWatch(args[0], bark_server_address, bark_token, namespaces)
+		fmt.Println(namespaces)
 		k8swatch.Watch()
 	},
 }
