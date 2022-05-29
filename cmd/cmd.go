@@ -36,7 +36,6 @@ var rootCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		k8swatch := k8s.NewK8sWatch(args[0], bark_server_address, bark_token, namespaces)
-		fmt.Println(namespaces)
 		k8swatch.Watch()
 	},
 }

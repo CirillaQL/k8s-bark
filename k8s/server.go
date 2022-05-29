@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"k8s-bark/bark"
 	"k8s-bark/pkg/logger"
-	"path/filepath"
-	"time"
-
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	"path/filepath"
+	"sync"
+	"time"
 )
 
 type K8sWatch struct {
@@ -24,6 +24,7 @@ type K8sWatch struct {
 	clientset  *kubernetes.Clientset // kubernetes 客户端
 	bark       *bark.Bark            // bark 客户端
 	namespaces []string              // 待监控命名空间
+	Resource   map[string]sync.Map   // 资源Map存储
 }
 
 func NewK8sWatch(location, barkServer, barkToken string, namespaces []string) (k8swatch *K8sWatch) {
@@ -62,14 +63,15 @@ func NewK8sWatch(location, barkServer, barkToken string, namespaces []string) (k
 	bark := bark.NewBark(barkServer, barkToken)
 	k8swatch.bark = bark
 	k8swatch.namespaces = namespaces
+	k8swatch.Resource = make(map[string]sync.Map)
 	return k8swatch
 }
 
 func (k8swatch *K8sWatch) Watch() {
 	stopper := make(chan struct{})
-	go k8swatch.bark.HealthzCheck()
+	//go k8swatch.bark.HealthzCheck()
 	go k8swatch.watchPodsStatus(stopper)
-	go k8swatch.bark.Send()
+	//go k8swatch.bark.Send()
 	select {}
 }
 
@@ -79,64 +81,64 @@ func (k8swatch *K8sWatch) Push(message bark.Message) {
 
 // watchPodsStatus 监控Pods的创建与删除
 func (k8swatch *K8sWatch) watchPodsStatus(stopper chan struct{}) {
-	// 初始化informer
-	podFactory := informers.NewSharedInformerFactory(k8swatch.clientset, 3*time.Hour)
-	podInformer := podFactory.Core().V1().Pods()
+	defer close(stopper)
+	// 初始化 informer
+	factory := informers.NewSharedInformerFactory(k8swatch.clientset, 6*time.Hour)
+	podInformer := factory.Core().V1().Pods()
 	informer := podInformer.Informer()
-	informer.Run(stopper)
+	defer runtime.HandleCrash()
 
-	// 从apiserver 同步资源，即List
+	// 启动 informer，list & watch
+	go factory.Start(stopper)
+
+	// 从 apiserver 同步资源，即 list
 	if !cache.WaitForCacheSync(stopper, informer.HasSynced) {
-		logger.Log().Error("Timed out waiting for caches to sync")
+		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync"))
 		return
 	}
 
+	// 创建 lister
 	podLister := podInformer.Lister()
-	podInitList, err := podLister.List(labels.Everything())
+	// 从 lister 中获取所有 items
+	podList, err := podLister.List(labels.Everything())
 	if err != nil {
-		logger.Log().Errorf("List pods failed: %s", err.Error())
+		fmt.Println(err)
 	}
 
-	// 使用自定义Handler
+	for _, pod := range podList {
+		resource := Resource{
+			ResourceType:    "Pod",
+			ResourceVersion: pod.ResourceVersion,
+			Value:           pod,
+		}
+		s := k8swatch.Resource["Pod"]
+		s.Store(pod.Name, resource)
+	}
+
+	// 使用自定义 handler
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			new_pod := obj.(*v1.Pod)
-			for _, podInList := range podInitList {
-				if podInList.Name == new_pod.Name {
-					if podInList.ResourceVersion == new_pod.ResourceVersion {
-						return
-					} else {
-						m := bark.Message{
-							Type:        "Pod",
-							Status:      "Add",
-							Information: fmt.Sprintf("Pod_%s_is_created", new_pod.Name),
-						}
-						logger.Log().Infof("%+v", m)
-					}
-				}
-			}
-		},
-		UpdateFunc: func(old, new interface{}) {
-			old_pod := old.(*v1.Pod)
-			new_pod := new.(*v1.Pod)
-			if old_pod.ResourceVersion != new_pod.ResourceVersion {
-				m := bark.Message{
-					Type:        "Pod",
-					Status:      "Update",
-					Information: fmt.Sprintf("Pod_%s_is_updated", new_pod.Name),
-				}
-				logger.Log().Infof("%+v", m)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
-			m := bark.Message{
-				Type:        "Pod",
-				Status:      "Delete",
-				Information: fmt.Sprintf("Pod_%s_is_deleted", pod.Name),
+			for _, pods := range podList {
+				if pods.Name == pod.Name && pods.ResourceVersion != pod.ResourceVersion {
+					fmt.Println(pod)
+				} else {
+					m := bark.Message{
+						Type:        "Pod",
+						Status:      "Adding",
+						Information: fmt.Sprintf("Pod"),
+					}
+					k8swatch.Push(m)
+					continue
+				}
 			}
-			logger.Log().Infof("%+v", m)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			fmt.Println(oldObj.(*corev1.Pod).Name)
+		}, // 此处省略 workqueue 的使用
+		DeleteFunc: func(interface{}) {
+			fmt.Println("delete not implemented")
 		},
 	})
-
+	<-stopper
 }
